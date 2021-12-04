@@ -8,6 +8,10 @@ import System.File
 
 data BingoNum = M Nat | U Nat
 
+Show BingoNum where
+  show (M k) = "m " ++ show k
+  show (U k) = "u " ++ show k
+
 Card : Type
 Card = List (List BingoNum)
 
@@ -36,11 +40,8 @@ winRow (x :: xs) = all isMarked x || winRow xs
 winColumn : Card -> Bool
 winColumn c = any id $ foldl (\a => \bs => (\(b1, b2) => b1 && b2) <$> zip a (isMarked <$> bs)) (replicate 5 True) c
 
-wins : List Card -> Maybe Card
-wins [] = Nothing
-wins (c :: cs) = if winRow c || winColumn c
-                    then Just c
-                    else wins cs
+wins : Card -> Bool
+wins c = winRow c || winColumn c
 
 drawNumber : Nat -> Card -> Card
 drawNumber n [] = []
@@ -52,10 +53,14 @@ drawNumber n (x :: xs) = ((\d => case d of
 
 drawNumbers : List Nat -> List Card -> Maybe (Card, Nat)
 drawNumbers [] cs = Nothing
-drawNumbers (x :: xs) cs = let ncs = drawNumber x <$> cs in
-                               case wins ncs of 
-                                    Just c => Just (c, x)
-                                    Nothing => drawNumbers xs ncs
+drawNumbers (x :: xs) [] = Nothing
+drawNumbers (x :: xs) (c :: []) = let nc = drawNumber x c in
+                                      if wins nc
+                                         then Just (nc, x)
+                                         else drawNumbers xs (nc :: [])
+drawNumbers (x :: xs) cs = let ncs = drawNumber x <$> cs
+                               losing = filter (not . wins) ncs in
+                               drawNumbers xs losing
 
 scoreOf : Card -> Nat
 scoreOf [] = 0

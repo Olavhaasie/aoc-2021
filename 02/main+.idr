@@ -19,13 +19,13 @@ parseCommand s = do (c, i) <- pure $ break (== ' ') s
 parseLines : (String -> Maybe a) -> String -> List a
 parseLines f s = catMaybes $ f <$> lines s
 
-doCommand : (Int, Int) -> Command -> (Int, Int)
-doCommand (p, d) (Forward x) = (p + x, d)
-doCommand (p, d) (Up x) = (p, d - x)
-doCommand (p, d) (Down x) = (p, d + x)
+doCommand : (Int, Int, Int) -> Command -> (Int, Int, Int)
+doCommand (p, d, a) (Forward x) = (p + x, d + a * x, a)
+doCommand (p, d, a) (Up x) = (p, d, a - x)
+doCommand (p, d, a) (Down x) = (p, d, a + x)
 
 run : String -> IO ()
-run s = do let (p, d) = foldl doCommand (0, 0) $ parseLines parseCommand s
+run s = do let (p, d, _) = foldl doCommand (0, 0, 0) $ parseLines parseCommand s
            putStrLn $ show $ p * d
 
 main : IO ()

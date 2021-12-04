@@ -8,7 +8,9 @@ import System.File
 increases : List Int -> Int
 increases [] = 0
 increases (x :: []) = 0
-increases (x :: (y :: xs)) = (if x < y then 1 else 0) + increases (y ::xs)
+increases (x :: (y :: [])) = 0
+increases (x :: (y :: (z :: []))) = 0
+increases (x :: (y :: (z :: (w :: xs)))) = (if x + y + z < y + z + w then 1 else 0) + increases (y ::(z :: (w :: xs)))
 
 parseLines : (String -> Maybe a) -> String -> List a
 parseLines f s = catMaybes $ f <$> lines s

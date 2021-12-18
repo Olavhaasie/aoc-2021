@@ -80,7 +80,7 @@ part1 : Input -> IO String
 part1 = pure . show . magnitude . foldl1 add
 
 part2 : Input -> IO String
-part2 a = pure "Part 2 not implemented"
+part2 a = pure $ show $ foldl1 max $ (\n1 => foldl1 max $ (\n2 => (magnitude $ add n1 n2)) <$> a) <$> a
 
 main : IO ()
 main = do Right input <- readFile "input.txt"

@@ -1,0 +1,5 @@
+package solution
+main = Main
+executable = main
+depends = contrib
+

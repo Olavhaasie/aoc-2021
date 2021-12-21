@@ -1,4 +1,6 @@
+import Data.List
 import Data.Nat
+import Data.SortedMap
 import Control.Monad.State
 import Control.Monad.State.State
 import Control.Monad.State.Interface
@@ -8,67 +10,95 @@ record Player where
   score : Nat
   pos : Nat
 
-Show Player where
-  show (MkPlayer score pos) = "(s=" ++ show score ++ ",p=" ++ show pos ++ ")"
+Eq Player where
+  p1 == p2 = p1.score == p2.score && p1.pos == p2.pos
+
+Ord Player where
+  compare p1 p2 = compare (p1.score, p1.pos) (p2.score, p2.pos)
+
+data Turn = P1 | P2
+
+Eq Turn where
+  P1 == P1 = True
+  P2 == P2 = True
+  _  == _  = False
+
+Ord Turn where
+  compare P1 P1 = EQ
+  compare P1 P2 = LT
+  compare P2 P1 = GT
+  compare P2 P2 = EQ
+
+next : Turn -> Turn
+next P1 = P2
+next P2 = P1
 
 record Game where
   constructor MkGame
   player1, player2 : Player
-  turn : Nat
+  turn : Turn
   rolls : Nat
 
-Show Game where
-  show (MkGame player1 player2 turn rolls) = show player1 ++ "\n" ++ show player2 ++ "\n" ++ show turn ++ "\n" ++ show rolls
-
 fromStart : Nat -> Nat -> Game
-fromStart p1 p2 = MkGame (MkPlayer 0 p1) (MkPlayer 0 p2) 0 0
+fromStart p1 p2 = MkGame (MkPlayer 0 p1) (MkPlayer 0 p2) P1 0
 
 score : Game -> Nat
-score (MkGame p1 p2 _ rolls) = if p1.score > p2.score
-                                  then p2.score * rolls
-                                  else p1.score * rolls
+score (MkGame p1 p2 _ rolls) = (*) rolls $ max p1.score  p2.score
 
 rollDet : State Game Nat
 rollDet = do rolls <- gets (.rolls)
              modify { rolls $= S }
              pure $ 1 + (modNatNZ rolls 100 SIsNonZero)
 
-movePlayer : Nat -> Nat -> Nat
-movePlayer pos move = (modNatNZ (pos + move) 10 SIsNonZero)
+movePlayer : Nat -> Player -> Player
+movePlayer m (MkPlayer score pos) = let npos = (modNatNZ (pos + m) 10 SIsNonZero) in
+                                         MkPlayer (score + npos + 1) npos
 
 playDet : State Game ()
-playDet = do turn <- gets (.turn)
-             if (modNatNZ turn 2 SIsNonZero) == 0
-                then do p1 <- gets (.player1.pos)
-                        r1 <- rollDet
-                        r2 <- rollDet
-                        r3 <- rollDet
-                        let pos = movePlayer p1 (r1 + r2 + r3)
-                        modify { player1.score $= (+) (S pos) , player1.pos := pos }
-                else do p2 <- gets (.player2.pos)
-                        r1 <- rollDet
-                        r2 <- rollDet
-                        r3 <- rollDet
-                        let pos = movePlayer p2 (r1 + r2 + r3)
-                        modify { player2.score $= (+) (S pos) , player2.pos := pos }
+playDet = do rolls <- sequence $ replicate 3 rollDet
+             let r = sum rolls
+             turn <- gets (.turn)
+             case turn of
+                  P1 => modify { player1 $= movePlayer r }
+                  P2 => modify { player2 $= movePlayer r }
              s1 <- gets (.player1.score)
              s2 <- gets (.player2.score)
              if s1 >= 1000 || s2 >= 1000
                 then pure ()
-                else do modify { turn $= S }
-                        playDet
+                else modify { turn $= next } *> playDet
 
 part1 : Game -> IO String
 part1 a = do let g = execState a playDet
              pure $ show $ score g
 
 
-playDirac : State Game (Nat, Nat)
-playDirac = ?p
+Memoize : Type
+Memoize = SortedMap (Player, Player, Turn) (Nat, Nat)
+
+addPair : Num a => (a, a) -> (a, a) -> (a, a)
+addPair (x, y) (z, w) = (x + z, y + w)
+
+wins : Player -> Bool
+wins (MkPlayer score pos) = score >= 21
+
+playDirac : Nat -> Memoize -> Game -> ((Nat, Nat), Memoize)
+playDirac _ m (MkGame p1 p2 turn 0) = case lookup (p1, p2, turn) m of
+                                           (Just w) => (w, m)
+                                           Nothing => let (w, m) = foldl (\(w, m) => \d => mapFst (addPair w) $ playDirac d m (MkGame p1 p2 turn 1)) ((0, 0), m) $ [1,2,3] in
+                                                          (w, insert (p1, p2, turn) w m)
+playDirac s m (MkGame p1 p2 P1 3) = let p1' = movePlayer s p1 in
+                                        if wins p1'
+                                           then ((1, 0), m)
+                                           else playDirac 0 m (MkGame p1' p2 P2 0)
+playDirac s m (MkGame p1 p2 P2 3) = let p2' = movePlayer s p2 in
+                                        if wins p2'
+                                           then ((0, 1), m)
+                                           else playDirac 0 m (MkGame p1 p2' P1 0)
+playDirac s m (MkGame p1 p2 turn r) = foldl (\(w, m) => \d => mapFst (addPair w) $ playDirac (s + d) m (MkGame p1 p2 turn (1 + r))) ((0, 0), m) $ [1,2,3]
 
 part2 : Game -> IO String
-part2 a = do let g = execState a playDirac
-             pure $ show $ score g
+part2 a = do let (wins, _) = playDirac 0 empty a
+             pure $ show $ (uncurry max) wins
 
 
 main : IO ()

@@ -60,7 +60,36 @@ validPlaces : Vect 7 (Fin 11)
 validPlaces = [0,1,3,5,7,9,10]
 
 moveToHall : State n -> List (State n)
-moveToHall s = []
+moveToHall s = join $ moveFromRoom <$> (forget $ allFins 3)
+  where
+    getToMove : Fin 4 -> Maybe (Fin n)
+    getToMove r = do let room = index r s.rooms
+                     if any (not . (==) r . roomOf) $ catMaybes $ toList room
+                        then findIndex isJust room
+                        else Nothing
+
+    pathToHall : Fin 4 -> Fin 11 -> Maybe Nat
+    pathToHall r to = do let from = finToNat $ roomToHall r
+                         let to = finToNat $ to
+                         let (min, max) = if from > to
+                                             then (to, from)
+                                             else (from + 1, to + 1)
+                         let dist = minus max min
+                         if any isJust $ take dist $ drop min $ toList s.hall
+                            then Nothing
+                            else Just dist
+
+    moveFromRoom : Fin 4 -> List (State n)
+    moveFromRoom r = do case getToMove r of
+                          Nothing => []
+                          (Just i) => let a = index i $ index r s.rooms
+                                          en = maybe 0 energy a
+                                          ps = catMaybes $ (\p => (p,) <$> pathToHall r p) <$> toList validPlaces in
+                                          ps <&> \(p,n) => {
+                                            hall $= replaceAt p a,
+                                            rooms $= updateAt r (replaceAt i Nothing),
+                                            energy $= (+) (en * (n + (finToNat i) + 1))
+                                          } s
 
 moveToRoom : {n : Nat} -> State n -> List (State n)
 moveToRoom s = catMaybes $ toList $ moveToRoom' s <$> validPlaces
